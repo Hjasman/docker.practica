@@ -1,0 +1,65 @@
+services:
+  database:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: cv_db
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-cv_dev_password}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "3306:3306"
+    networks:
+      - cv_network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: always
+
+  backend:
+    image: ${DOCKERHUB_USER:-hjasman}/${APELLIDO:-salinas}-backend:v1
+    container_name: Salinas-backend
+    build:
+      context: ./backend
+    environment:
+      PORT: 4000
+      UPLOAD_DIRECTORY: /app/uploads
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_NAME: cv_db
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-cv_dev_password}
+    ports:
+      - "4000:4000"
+    volumes:
+      - uploaded_photos:/app/uploads
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - cv_network
+    restart: always
+
+  frontend:
+    image: ${DOCKERHUB_USER:-hjasman}/${APELLIDO:-salinas}-frontend:v1
+    container_name: Salinas-frontend
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - cv_network
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  uploaded_photos:
+
+networks:
+  cv_network:
+    driver: bridge
